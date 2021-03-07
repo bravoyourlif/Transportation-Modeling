@@ -1,0 +1,104 @@
+---
+title: 'UP431 Lab2: Exploring NHTS Data (2) Home Activity'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: 
+    latex_engine: xelatex
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<!--
+Updated: 2021-02-05 by Chaeyeon Han @ University of Illinois at Urbana-Champaign UP431 Spring 2021
+-->
+
+# Using NHTS Data (2)
+  
+We will continue to use the Chicago metropolitan area data. You should get started by importing the data you have saved last week.Reading the RDS file back in is as simple as assigning the output of read_rds("filename") to a new object. Since read_rds function is coming from the tidyverse package, you should import the package before you start.
+
+```{r, message = FALSE, warning=FALSE}
+library(tidyverse)
+chi_trips <- read_rds("C:/Lab0/2021_UP431/Lab1/Output/chi_trips.rds") # your path
+```
+
+If the data import was successful, you will see chi_trips on the Environment tab (typically on the right side of the source tab).
+
+Check the column names using `names` function.
+
+```{r}
+names(chi_trips)
+```
+
+
+**Task 1** 
+Aggregate the mode choice by income group. 
+
+Which variable describes the income group? <!-- mode_short ~ HHFAMINC-->
+
+```{r}
+# check levels
+levels(chi_trips$HHFAMINC)
+```
+
+Simplify income group to lower (< 50% of median income), moderate (50% >= and < 80%), middle (80% - 12%), and upper (>= 120%) income groups. Use 2017 median income, which is about $61,500.
+
+```{r}
+# collapse columns into 3 levels
+# <50% (<30750), 50%<=<80% (30750-49200), 80%-120% (49200-73800), 120%< (73800)
+# filter missing
+mode_income <- chi_trips %>%
+  mutate(
+    hhincome_short = fct_collapse(
+      HHFAMINC,
+      "Lower" = c(
+        "Less than $10,000",
+        "$10,000 to $14,999",
+        "$15,000 to $24,999",
+        "$25,000 to $34,999"
+      ),
+      "Moderate" = c("$35,000 to $49,999"),
+      "Middle" = c("$50,000 to $74,999"),
+      "Upper" = c(
+        "$75,000 to $99,999",
+        "$100,000 to $124,999",
+        "$125,000 to $149,999",
+        "$150,000 to $199,999",
+        "$200,000 or more"
+      ),
+      Missing = c("I prefer not to answer", "I don't know", "Not ascertained")
+    )
+  ) %>% filter(hhincome_short != "Missing")
+```
+
+
+```{r}
+levels(mode_income$hhincome_short)
+```
+
+Now you are ready to aggregate mode choice by income group. 
+
+```{r}
+# Your code comes here
+
+```
+
+Visualize the data and elaborate your observation.
+
+1) Use geom_bar position='dodge' option.
+
+```{r}
+# Your code comes here
+
+```
+
+2) Use `facet_wrap` to create separate graph for each income group. Write `?facet_wrap` in the console and press enter to find out how to use the function.
+
+```{r}
+# Your code comes here
+
+```
+

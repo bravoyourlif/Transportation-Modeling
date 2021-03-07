@@ -1,0 +1,217 @@
+---
+title: 'UP431 Week 5: Discrete Choice Analysis (2)'
+author: "Jesus Barajas, Chaeyeon Han, and Bumsoo Lee"
+date: "February 20, 2021"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Introduction
+
+This R Notebook complements the class lecture on multinomial logit analysis in Week 5. 
+
+Let's start to use R-project file. Go to pull down menu, "File", select "New Project...". select "Existing Directory". Then, select the folder where you saved the data and rmd files. You can see project file with the same name is created in the folder. Now this is your working directory.
+
+You can create a new folder where you want to save output files
+
+```{r}
+getwd()
+dir.create("Output")
+```
+
+# Multinomial Logit 
+
+We'll continue to work with an extract of the 2007--2008 CMAP Travel Tracker Survey, a household travel survey conducted in the Northeastern Illinois/Northwestern Indiana areas. The extract we're using is all the trips to work by walk, drive, carpool, or transit for people who lived in Cook County Illinois.
+
+```{r}
+#install.packages("mlogit")
+
+library(tidyverse)
+library(mlogit)
+
+cook <- read_rds("C:/Lab0/2021_UP431/Data/cook_county_work.rds")
+```
+
+Variables included:
+
+- `mode`: Mode choice (Walk, Drive, Carpool, or Transit)
+- `tottr`: Number of people on the trip
+- `trpdur`: Duration of the trip (minutes)
+- `incom`: Household income ($000)
+- `dist`: Straight-line distance between origin and destination (mi)
+- `hhlic`: Number of household licensed drivers
+- `hhveh`: Number of household vehicles
+- `gend`: Gender
+- `cars_per_driver`: Household vehicles per licensed driver
+- `race_eth`: Race/ethnicity (Asian, Black, Hispanic, White, Unknown)
+
+all of the variables are *individual specific* (or *choice specific*); there are no alternative-specific variables. This means that each row in the data frame represents values that apply to a decision maker rather than to the choice outcome being analyzed. 
+
+Run a simple multinomial logit model with two independent variables, incom and gend:
+
+```{r}
+m1 <- mlogit(mode ~ 1 | incom + gend, cook, shape = "wide")
+summary(m1)
+```
+
+alternative-specific variables go on the left-hand side of the vertical bar (`|`) and the individual-specific variables go on the right-hand side. The 1 on the left-hand side of the bar indicates we want alternative-specific intercepts. 
+
+shape="wide" tells `mlogit` that we're using a wide dataset.
+
+What happens when we choose a different base case? Let's select driving as the reference level. We tell `mlogit()` we want to change the reference level by using the `reflevel` argument.
+
+```{r}
+m2 <- mlogit(mode ~ 1 | incom + gend, cook, shape = "wide", reflevel = "Drive")
+
+summary(m2)
+```
+
+Check if the predicted probabilities and expected outcomes from m1 and m2 results are the same or different. These models were run using the same independent variables, but wiht a different reference level. 
+
+```{r}
+# save probabilities in data frame
+m1_prob <- data.frame(m1$probabilities) %>% 
+  rownames_to_column(var="id") #adding id
+
+m2_prob <- data.frame(m2$probabilities) %>% 
+  rename(Carpool2= Carpool, Drive2= Drive, Transit2= Transit, Walk2= Walk) %>%
+  rownames_to_column(var="id")
+
+compare <- left_join(m1_prob, m2_prob, by= "id")
+
+```
+
+Are they the same?
+
+# Exporting result table
+
+It'd useful if you can export and edit regression output to txt and html. stargazer package exports summary results to Latex, txt, and html. 
+
+```{r}
+# install.packages("stargazer")
+library(stargazer)
+
+stargazer(m1, title= "Table 1: Model 1 result", out="Output/table1.txt")
+stargazer(m1, m2, out="Output/table2.htm", type="html",
+                  column.labels = c("Model 1", "Model 2"),
+                  title= "Table 1: Multinomial logit analysis results")
+```
+
+# Odds ratios--interpreting coefficients 1 
+
+Remember that we can report the coefficients as odds ratios rather than as differences in utility. ... 
+
+```{r}
+m2_or <- (exp(coef(m2)))
+stargazer(m2, type="html", coef= list(m2_or), out="Output/m2_or.htm")
+```
+
+Back to PPT for interpretation!
+
+# Exercise
+
+As an exercise, estimate mode choice as a function of the number of travelers of a trip, the duration of the trip, household income, travel distance, gender, the number of cars per driver, and race/ethnicity. Use drive alone as the reference category. Interpret your model, explaining all the significant coefficients.
+
+```{r}
+# Your code here
+
+
+```
+
+# Marginal effects--interpreting coefficients 2 
+
+Let's turn to the presentation to discuss this.
+
+We know how to compute odds ratios to report the effect of a variable on the outcome. But odds ratios aren't always easy to understand and interpret. For this we can use marginal effects, which are measures of the (instantaneous) effect that a change in an explanatory variable has on the predicted probability of an outcome variable. Marginal effects are most useful when graphed over the possible changes in that variable. I'm going to show you two ways to do this. In both cases, we'll work with model m3 from before.
+
+## Option 1: Computing your own new data frame
+
+Let's assume we want to compute the marginal effects of trip duration (`trpdur`) on mode choice. First, we have to decide what constant values to use for the variables we're not estimating effects for. (We can only compute marginal effects for one variable at a time.) There are essentially three ways to calculate marginal effects:
+
+1. Marginal effects at representative values
+2. Marginal effects at means
+3. Average marginal effects
+
+Marginal effects at representative values will use selected values of some importance for the other explanatory variables. For example, if you wanted to know the marginal effects of travel time for households earning $50,000 living 3 miles from work, you would create a new data frame that sets those values equal to your desired values.
+
+Marginal effects at means set the other explanatory variables to their mean values in the dataset. You might select this option if you want to get the marginal effects of travel time for the "typical" household.
+
+Average marginal effects will calculate the marginal effect for every possible value in the dataset and average the resulting values. This gives you a value that falls strictly within the bounds of the dataset. This is often the best way to communicate the marginal effects, but the most difficult to compute manually.
+
+We'll select a mix between 1 and 2 to compute our effects. For numeric values, we'll use the average value of the variable, but for factors, we'll chose the most common (modal) value. First, let's determine the range of travel time: we only want to calculate marginal effects for the possible values in our dataset.
+
+```{r}
+range(cook$trpdur)
+```
+
+Whoa! That's really too wide of a range to work with and be meaningful. Let's arbitrarily decide to limit our calculation to a travel time between 1 and 120 minutes. Here's how to construct our new data frame that we're going to use to predict:
+
+```{r}
+# new_data <- tibble(trpdur = rep(seq(1, 120, by = 1), 4))
+# tottr + trpdur + incom + dist + gend + cars_per_driver + race_eth
+
+new_data <- tibble(trpdur = seq(1, 120, by = 1),
+                   tottr = rep(mean(cook$tottr, na.rm = TRUE), 120),
+                   incom = rep(mean(cook$incom, na.rm = TRUE), 120),
+                   dist = rep(mean(cook$dist, na.rm = TRUE), 120),
+                   gend = rep(factor("Female", levels = levels(cook$gend)), 120),
+                   cars_per_driver = rep(mean(cook$cars_per_driver, na.rm = TRUE), 120),
+                   race_eth = rep(factor("White", levels = levels(cook$race_eth)), 120),
+                   mode = rep(c("Walk", "Drive", "Carpool", "Transit"), 30)) 
+                                
+
+new_data_long <- mlogit.data(new_data, choice = "mode", shape = "wide")
+# new_data_long
+```
+
+We're creating a new data frame of 60 rows, 1 for each minute of travel time 1-60. (That's what the `seq` function is doing.) For the other values, we're telling the tibble function to repeat (`rep`) the mean value 60 times. In the case of the two factors, we're making sure that the variable gets all the same factor labels as in the original dataset. We have to add the mode variable in too: the prediction function won't use it, but we have to make sure that all the choices are in the new dataset. I'm randomly assigning them, though you could use the same code as the other factor variables.
+
+Then we have to reshape the data, just as we did in the earlier exercises. We skipped this step in the estimation of the `m3` model, but we can't skip it here.
+
+Now, we can predict the probabilities:
+
+```{r}
+predicted <- predict(m3, new_data_long)
+```
+
+Take a look at the dataset. You'll notice that it only has the predicted probabilities. If we want to graph this, we need to add in the trip duration variable. Here's how:
+
+```{r}
+predicted_df <- bind_cols(select(new_data, trpdur), as_tibble(predicted))
+```
+
+We also have to tidy the data before we graph it; that is, turn the values (Carpool, Drive, Transit, Walk) into a variable (mode):
+
+```{r}
+predicted_df <- predicted_df %>% 
+  pivot_longer(-trpdur, names_to = "mode", values_to = "probability") 
+
+# exclude trpdur from pivoting
+```
+
+Now we can plot:
+
+```{r}
+ggplot(predicted_df, aes(trpdur, probability, color = mode)) +
+  geom_line()
+```
+
+# Exercise
+
+try creating a marginal effects plot for household income.
+
+```{r}
+# Your codes here
+
+
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,121 @@
+---
+title: 'UP431 Week 5.2: Discrete Choice Analysis (2)'
+author: "Jesus Barajas, Chaeyeon Han, and Bumsoo Lee"
+date: "February 25, 2021"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Introduction
+
+We will practice model specification, log likelihood test, and value of time calculation
+
+
+# Multinomial Logit with SF MTC commute data 2000
+
+This dataset extracted from 2000 SF MTC travel survey includes both trip- (individual-) specific variables and mode-specific variables.
+
+caseid: case id (commute trip) 
+alt: alternative number (1=Drive Alone; 2=Shared Ride 2; 3=Shared Ride 3+; 4=Transit; 5=Bike; 6=Walk)
+choice: 1 if chosen this mode
+numalts: number of alternatives available
+ivtt: in-vehicle travel time (minutes)
+ovtt: out-of-vehicle travel time
+tvtt: total travel time
+cost: travel cost (cents)
+dist: Oneway distance to work (miles)
+female: 1 if female
+age
+numveh: number of vehicles in household
+hhinc: household income
+wkccbd: 1 if working in core business district
+vehbywrk: number of vehicles divided by number of workers in hh
+
+```{r}
+#install.packages("mlogit")
+library(tidyverse)
+library(mlogit)
+
+SF <- read_csv("C:/Lab0/2021_UP431/Lab4/Sfmtc.csv")
+head(SF, 10)
+
+SF2 <- dfidx(SF, alt.levels= c("DA", "SR2", "SR3+", "Transit", "Bike", "Walk"))
+# head(SF2, 10)
+# if needed, you can also take a subset of the data, using subset argument
+# SF3 <- dfidx(ModeCanada, subset= numalts==6, alt.levels= c("DA", "SR2", "SR3+", "Transit", "Bike", "Walk"))
+
+m1.SF2 <- mlogit(choice ~ cost + tvtt | hhinc, data= SF2, reflevel= "DA")
+summary(m1.SF2)
+
+# if needed, you can do analysis only for subset of alternatives
+m2.SF2 <- mlogit(choice ~ cost + tvtt | hhinc, data= SF2, alt.subset= c("DA", "SR2", "SR3+", "Transit"), reflevel= "DA")
+summary(m2.SF2)
+
+SF
+```
+Let's see how sensitive we are to in-vehicle vs. out-of-vehicle travel time.
+
+```{r}
+m3.SF2 <- mlogit(choice ~ cost + ivtt + ovtt | hhinc, data= SF2, alt.subset= c("DA", "SR2", "SR3+", "Transit"), reflevel= "DA")
+summary(m3.SF2)
+```
+
+Let's go back to PPT
+
+# Log Likelihood Test
+
+McFadden R^2 of m3 is larger than that of m2. Let's perform a likelihood ratio test to see if it's statistically significantly better.
+
+```{r}
+lrtest(m3.SF2, m2.SF2)
+
+```
+
+the results are discussed in PPT
+
+Export the results.
+
+```{r}
+# install.packages("stargazer")
+library(stargazer)
+
+stargazer(m2.SF2, m3.SF2, out="Output/table1.htm", type="html",
+                  column.labels = c("Model 1", "Model 2"),
+                  title= "Table 1: Models with cost, time, and income")
+```
+
+
+# Value of time
+Let's go back to PPT and calculate the value of time that is manifested by commute mode choice.
+
+## Further modification of travel time variables
+Let's try to include total travel time and ovtt/dist
+```{r}
+SF3 <- SF %>% mutate(ovttdist= ovtt/dist)
+SF4 <- dfidx(SF3, alt.levels= c("DA", "SR2", "SR3+", "Transit", "Bike", "Walk"))
+
+m4.SF4 <- mlogit(choice ~ cost + tvtt + ovttdist | hhinc, data= SF4, alt.subset= c("DA", "SR2", "SR3+", "Transit"), reflevel= "DA")
+summary(m4.SF4)
+
+lrtest(m4.SF4, m3.SF2)
+```
+
+Modelt fit is better. Let's go back to PPT and see if value of time also makes more sense.
+
+# Exercise
+Using more relevant variables, build your best model.
+
+```{r}
+# your code here
+
+
+
+```
+
+
+
+
+
+

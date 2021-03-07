@@ -1,0 +1,84 @@
+---
+title: "Lab4_Marginal"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+# Marginal effects
+
+We know how to compute odds ratios to report the effect of a variable on the outcome. But odds ratios aren't always easy to understand and interpret. For this we can use marginal effects, which are measures of the (instantaneous) effect that a change in an explanatory variable has on the predicted probability of an outcome variable. Marginal effects are most useful when graphed over the possible changes in that variable. I'm going to show you two ways to do this. Neither is particularly straightforward given the way we've been calculating logit models so far, but you'll see why we're doing it this way in a few moments. In both cases, we'll work with model m2 from before.
+
+## Option 1: Computing your own new data frame
+
+Let's assume we want to compute the marginal effects of income (`incom`) on mode choice. First, we have to decide what constant values to use for the variables we're not estimating effects for. (We can only compute marginal effects for one variable at a time.) There are essentially three ways to calculate marginal effects:
+
+1. Marginal effects at representative values (MERs)
+2. Marginal effects at means (MEMs)
+3. Average marginal effects (AMEs)
+
+Marginal effects at representative values will use selected values of some importance for the other explanatory variables. For example, if you wanted to know the marginal effects of travel time for households earning $50,000 living 3 miles from work, you would create a new data frame that sets those values equal to your desired values.
+
+Marginal effects at means set the other explanatory variables to their mean values in the dataset. You might select this option if you want to get the marginal effects of travel time for the "typical" household.
+
+Average marginal effects will calculate the marginal effect for every possible value in the dataset and average the resulting values. This gives you a value that falls strictly within the bounds of the dataset. This is often the best way to communicate the marginal effects, but the most difficult to compute manually.
+
+We'll select a mix between 1 and 2 to compute our effects. For numeric values, we'll use the average value of the variable, but for factors, we'll chose the most common (modal) value. First, let's determine the range of travel time: we only want to calculate marginal effects for the possible values in our dataset.
+
+```{r}
+range(cook$incom, na.rm = TRUE)
+```
+```{r}
+prop.table(table(cook$race_eth))
+```
+
+Whoa! That's really too wide of a range to work with and be meaningful. Let's arbitrarily decide to limit our calculation to a travel time between 1 and 60 minutes. Here's how to construct our new data frame that we're going to use to predict:
+
+```{r}
+#ew_data <- tibble(incom = rep(seq(20, 155, by = 5)))
+# incom + gend
+new_data <- tibble(incom = rep(seq(20, 155, by = 5)), # 28 rows
+                   gend = rep(factor("Male", levels = levels(cook$gend)), 28),
+                   mode = rep(c("Walk", "Drive", "Carpool", "Transit"), 7)) 
+                                
+
+new_data_long <- mlogit.data(new_data, choice = "mode", shape = "wide")
+```
+
+We're creating a new data frame of 28 rows, 5 for income 20-155. (That's what the `seq` function is doing.) For the other values, we're telling the tibble function to repeat (`rep`) the mean value 60 times. In the case of the two factors, we're making sure that the variable gets all the same factor labels as in the original dataset. We have to add the mode variable in too: the prediction function won't use it, but we have to make sure that all the choices are in the new dataset. I'm randomly assigning them, though you could use the same code as the other factor variables.
+
+Then we have to reshape the data, just as we did in the earlier exercises. We skipped this step in the estimation of the `m2` model, but we can't skip it here.
+```{r}
+new_data_long
+```
+
+Now, we can predict the probabilities:
+
+```{r}
+predicted <- predict(m2, new_data_long)
+```
+
+Take a look at the dataset. You'll notice that it only has the predicted probabilities. If we want to graph this, we need to add in the trip duration variable. Here's how:
+
+```{r}
+predicted_df <- bind_cols(select(new_data, incom), as_tibble(predicted))
+```
+
+We also have to tidy the data before we graph it; that is, turn the values (Carpool, Drive, Transit, Walk) into a variable (mode):
+
+```{r}
+predicted_df <- predicted_df %>% 
+  pivot_longer(-incom, names_to = "mode", values_to = "probability")
+```
+
+Now we can plot:
+
+```{r}
+ggplot(predicted_df, aes(incom, probability, color = mode)) +
+  geom_line()
+```
+

@@ -1,0 +1,22 @@
+Obs,Time_Auto,Time_Transit,Choice,Utility_Auto,Utility_Transit,Expected selection
+1,52.9,4.4,Transit,-2.57149,0.00386,Transit
+2,4.1,28.5,Transit,0.01979,-1.27585,Auto
+3,4.1,86.9,Auto,0.01979,-4.37689,Auto
+4,56.2,31.6,Transit,-2.74672,-1.44046,Transit
+5,51.8,20.2,Transit,-2.51308,-0.83512,Transit
+6,0.2,91.2,Auto,0.22688,-4.60522,Auto
+7,27.6,79.7,Auto,-1.22806,-3.99457,Auto
+8,89.9,2.2,Transit,-4.53619,0.12068,Transit
+9,41.5,24.5,Transit,-1.96615,-1.06345,Transit
+10,95,43.5,Transit,-4.807,-2.07235,Transit
+11,99.1,8.4,Transit,-5.02471,-0.20854,Transit
+12,18.5,84,Auto,-0.74485,-4.2229,Auto
+13,82,38,Auto,-4.1167,-1.7803,Transit
+14,8.6,1.6,Transit,-0.21916,0.15254,Transit
+15,22.5,74.1,Auto,-0.95725,-3.69721,Auto
+16,51.4,83.8,Auto,-2.49184,-4.21228,Auto
+17,81,19.2,Transit,-4.0636,-0.78202,Transit
+18,51,85,Auto,-2.4706,-4.276,Auto
+19,62.2,90.1,Auto,-3.06532,-4.54681,Auto
+20,95.1,22.2,Transit,-4.81231,-0.94132,Transit
+21,41.6,91.5,Auto,-1.97146,-4.62115,Auto

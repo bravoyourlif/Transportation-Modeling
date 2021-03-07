@@ -1,0 +1,278 @@
+---
+title: 'UP431 Lab3: Discrete Choice Analysis (1)'
+author: "Chaeyeon Han"
+date: "February 18, 2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Introduction
+
+This R Notebook complements the class lecture on discrete choice analysis. Let's start with a simple example to explore how we might estimate a model that predicts mode choice based on just a few variables.
+
+## Exploring binary choice models
+
+Assume that you have a small dataset that, for each person, gives you the possible travel time between two points separately for auto travel and transit travel. Also assume the dataset gives you the mode the person ultimately selected. There are two possible modes: auto and transit. The dataset is posted on Compass. Import the csv file into an object called `binchoice`.
+
+```{r}
+library(tidyverse)
+
+binchoice <- read_csv("Data/simple_example2.csv")
+```
+
+How would you expect the different values for travel time to influence mode choice? Let's plot the data, with transit travel time on the x-axis and auto travel time on the y-axis, identifying the mode selected by shape and color.
+
+```{r}
+ggplot(binchoice, aes(Time_Transit, Time_Auto, shape = Choice, color = Choice)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed")
+```
+
+It appears that transit is the preferred mode for most circumstances where the transit travel time is less than 50 minutes because in most of those instances, transit time is less than auto time. The other way to look at this is to draw a line with slope 1 and see which alternative falls on either side of the line. Again, the mode selected is usually the one which has the lower travel time.
+
+Let's estimate a model that predicts how travel time influences whether an individual takes auto or transit. We need the `mlogit` package to estimate the model, so make sure it's installed on your machine.
+
+```{r}
+#install.packages("mlogit")
+library(mlogit)
+```
+
+Remember that what's going on behind the scenes is that we're estimating the utility of each mode, auto ($A$) and transit ($T$) for each traveler. The utilities we're interested in are:
+
+$$
+V_{An} = \beta_1 A_A + \beta_2 T_A \\
+V_{Tn} = \beta_1 A_T + \beta_2 T_T
+$$
+
+where *A* is alternative-specific constant indicating whether the utility is for auto (1) or transit (0), and *T* is the travel time for that mode. We have to estimate each $\beta$ in the model to determine the utility values. But first, we need to do some data manipulation to get the data frame in a format that works with the `mlogit` package and the `mlogit` function.
+
+Data sets can have two different shapes :
+• a wide shape : in this case, there is one row for each choice situation,
+• a long shape : in this case, there is one row for each alternative and, therefore, as many rows as there are alternatives for each choice situation.
+
+```{r, warning = FALSE}
+# 1. We have to wrestle data into shape. The mlogit function wants a data frame in
+# a special "long" format: one row for each ID and each possible choice. We use
+# the mlogit.data function to do this. We tell it that the data is in a "wide"
+# shape (one row for each observation), that the variable that contains the 
+# chosen alternative is called "Choice", that columns 2 and 3 vary depending
+# on the choice, that those columns use the "_" character to separate the variable
+# from the mode it applies to, and that the levels of the selected alternative 
+# are transit and auto, in that order. (Because we said the transit utility is 0.)
+model_data <- mlogit.data(binchoice, shape = "wide", choice = "Choice", 
+                          varying = c(2, 3), sep = "_", 
+                          alt.levels = c("Transit", "Auto"))
+model_data
+# 2. Now we can estimate the model
+# This says that Choice is a function of travel time (of both modes)
+m1 <- mlogit(Choice ~ Time, model_data)
+
+# 3. And read the summary
+summary(m1)
+```
+
+## Predicting Probabilities
+
+Based on the result above, calculate the estimated probabilities estimated probabilities that the surveyed individual would choose either Auto or Transit. What percentage of modes chosen did the model estimate correctly?
+
+```{r}
+# Your code here
+# Start with writing down equations
+
+# 1. Calculate utility for each choice
+Ua - utility auto 0.237573*0 + -0.053110*Time_Auto
+Ut - utility transit 0.237573*1 + -0.053110*Time_Auto
+
+#2. Calculate probability for each choice based on utility
+Pa - exp(Ua)/exp(Ua)+exp(Ut)
+Pt - exp(Ut)/exp(Ua)+exp(Ut)
+
+# 3. Create Expected column based on probability column - larger probability
+
+# 4. Compare Expected with Choice and put TRUE if they are the same /FALSE if not.
+
+
+```
+
+# Multinomial Choice 
+
+In the previous examples, we looked at the case where a decision maker only had two choices. Now, we'll look at the case where there are multiple options. We'll work with an extract of the 2007--2008 CMAP Travel Tracker Survey, a household travel survey conducted in the Northeastern Illinois/Northwestern Indiana areas. The extract we're using is all the trips to work by walk, drive, carpool, or transit for people who lived in Cook County Illinois.
+
+```{r}
+library(tidyverse)
+library(mlogit)
+
+cook <- read_rds("C:/Lab0/2021_UP431/Lab3/Data/cook_county_work.rds")
+```
+
+Here are the variables in the dataset. Remember, you can find this out by clicking the data frame in the Data section of the environment tab, or using the `str()` function.
+
+- `mode`: Mode choice (Walk, Drive, Carpool, or Transit)
+- `tottr`: Number of people on the trip
+- `trpdur`: Duration of the trip (minutes)
+- `incom`: Household income ($000)
+- `dist`: Straight-line distance between origin and destination (mi)
+- `hhlic`: Number of household licensed drivers
+- `hhveh`: Number of household vehicles
+- `gend`: Gender
+- `cars_per_driver`: Household vehicles per licensed driver
+- `race_eth`: Race/ethnicity (Asian, Black, Hispanic, White, Unknown)
+
+There's one key feature of this dataset: all of the variables are *individual specific* (or *choice specific*); there are no alternative-specific variables. This means that each row in the data frame represents values that apply to a decision maker rather than to the choice outcome being analyzed. This is important for how we specify the formula in the `mlogit()` function later.
+
+
+Let's start simply and see what the effects of household income and gender are on mode choice. It's always a good idea to graph your data first to see if there are potential differences worth modeling. We have to graph each variable separately.
+
+Income:
+
+```{r}
+ggplot(cook, aes(mode, incom)) +
+  geom_boxplot()
+```
+
+Gender:
+
+```{r}
+ggplot(cook, aes(mode, fill = gend, group = gend)) +
+  geom_bar(position = "dodge")
+```
+```{r}
+cook <- cook %>% filter(!is.na(cook$incom) & !is.na(cook$gend))
+```
+
+
+It appears that there are differences in mode choice by income and gender, so let's continue using them as explanatory variables.
+
+Here's how to specify the model:
+
+```{r}
+m1 <- mlogit(mode ~ 1 | incom + gend, cook, shape = "wide")
+```
+
+Data sets can have two different shapes :
+• a wide shape : in this case, there is one row for each choice situation,
+• a long shape : in this case, there is one row for each alternative and, therefore, as many rows as there are alternatives for each choice situation.
+
+This formula looks different from what we specified previously in the binomial models. Why? Because all the variables are individual specific, whereas our previous variables were alternative-specific. In the formula for `mlogit`, alternative-specific variables go on the left-hand side of the vertical bar (`|`) and the individual-specific variables go on the right-hand side. The 1 on the left-hand side of the bar indicates we want alternative-specific intercepts. We did this manually in the binomial versions of the models, but `mlogit` is smart enough to do this for us. 
+
+Note that we also didn't reshape our data before adding it to the model. When our variables are all individual-specific, we can skip this step and instead tell `mlogit` that we're using a wide dataset. Now let's look at the summary:
+
+```{r}
+summary(m1)
+```
+
+What happens when we choose a different base case? Let's select driving as the reference level. We tell `mlogit()` we want to change the reference level by using the `reflevel` argument.
+
+```{r}
+m2 <- mlogit(mode ~ 1 | incom + gend, cook, shape = "wide", reflevel = "Drive")
+summary(m2)
+```
+Evaluate the model.
+X^2(9) = 87.485, p<.001, <- chisq, 9 is from the number of coefficients
+McFadden = Pseudo R^2 
+
+Which are significant predictors?
+
+Let's turn again to the presentation. 
+
+Remember that we can report the coefficients as odds ratios rather than as differences in utility. 
+
+
+```{r}
+data.frame(exp(coef(m2)))
+```
+
+## EXERCISE: Predicting Probabilities (Multinomial Choice)
+
+Based on the result above, calculate the estimated probabilities that the surveyed individual would choose from mode choices. What percentage of the mode chosen did the model estimate correctly?
+
+(1) Manual Calculation 
+
+This process is similar with the one we did in binomial model analysis, but it is a little bit trickier, so if you want to find an easier way, just move on to the next section.
+
+Keep in mind that the reference level is Drive! You can make utility equations that each corresponds to Carpool, Walk, and Transit but not Drive, since it is the reference level. When calculating probability, you can think exp(Utility_Drive) as 1. 
+
+To be more specific, below is an example model where p3 is a reference level.You should compute lines in order. 
+First calculate exponential values, then divide it by the denominator which is the sum or exponentials. 
+
+compute p1 = exp(p1) .
+compute p2 = exp(p2) .
+compute p3 = 1 .
+
+compute denom = p1 + p2 + p3 .
+
+compute p1 = p1 / denom .
+compute p2 = p2 / denom .
+compute p3 = p3 / denom .
+
+```{r}
+# Your code here
+# Drive is the ref level
+cook2 <- cook %>%
+  mutate(Utility_Carpool = -2.47170448 + -0.00390329 * incom + 0.37277183 * if_else(gend == 'Female', 1, 0),
+         Utility_Walk = -2.12258755 + 0.00398056 * incom + 0.03570936 * if_else(gend == 'Female', 1, 0),
+         Utility_Transit = -1.43059120 + -0.00543317 * incom + 0.13933690 * if_else(gend == 'Female', 1, 0)) %>% 
+  mutate(Prob_Carpool = exp(Utility_Carpool) / (exp(Utility_Carpool) + exp(Utility_Walk) + exp(Utility_Transit) + 1), # 1 is for Drive
+         Prob_Walk = exp(Utility_Walk) / (exp(Utility_Carpool) + exp(Utility_Walk) + exp(Utility_Transit) + 1),
+         Prob_Transit = exp(Utility_Transit) / (exp(Utility_Carpool) + exp(Utility_Walk) + exp(Utility_Transit) + 1),
+         Prob_Drive = 1 / (exp(Utility_Carpool) + exp(Utility_Walk) + exp(Utility_Transit) + 1))
+```
+
+Check cook2. Now you have probabilities for all modes. 
+```{r}
+cook2
+```
+
+Then to evaluate how many rows the model predicted correctly, we will add 'Expected' values and 'Correct' values as we did in the binomial model.This could be little tricky. 
+
+```{r}
+# Create a new column named Expected
+# Put Mode with Largest Prob
+
+# temporary variable to store Mode with largest prob
+max <- vector(mode="numeric")
+
+# iterate each row 
+for (i in 1:nrow(cook2)) {
+   # input which prob is the largest - which.max brings the index of the largest column 
+   max[i] <- as.numeric(which.max(cook2[i,c(14:17)])[[1]])
+   
+   # input mode according to the index
+   modes <- c("Carpool","Walk","Transit","Drive")
+   max[i] <- modes[as.numeric(max[i])]
+}
+
+# attach to cook 
+cook2$Expected <- max
+
+# delete rows with NA Expected
+cook2 <- filter(cook2, !is.na(cook2$Expected))
+
+# Create Correct col and summarise
+cook2 <- mutate(cook2, Correct = if_else(mode == as.character(Expected), TRUE, FALSE))
+prop.table(table(cook2$Correct))
+```
+(2) Using model$probabilities
+
+When you view m2, you will find an attribute called probabilities. Use the console to view m2$probabilities. Each row contains the probability for each mode for each observation. It is the same thing as what we manually calculated in section (1). We can use this to simplify the code. 
+
+```{r}
+# store probabilities for each mode of each observation
+correct <- m2$probabilities
+
+# For each row, select the column with the largest value and extract the column name. Store it in a variable
+binaryCorrect <- colnames(correct)[apply(correct, 1, which.max)]
+
+# See how it is distributed
+table(cook$mode, binaryCorrect)
+
+# attach it to the original dataframe
+cook$Expected <- binaryCorrect
+```
+```{r}
+cook <- mutate(cook, Correct = if_else(mode == as.character(Expected), TRUE, FALSE))
+prop.table(table(cook$Correct))
+```
+

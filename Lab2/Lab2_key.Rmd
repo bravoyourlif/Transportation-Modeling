@@ -1,0 +1,322 @@
+---
+title: 'UP431 Lab2: Exploring NHTS Data (2)'
+output:
+  pdf_document: 
+    latex_engine: xelatex
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<!--
+Updated: 2021-02-11 by Chaeyeon Han @ University of Illinois at Urbana-Champaign UP431 Spring 2021
+-->
+
+# Using NHTS Data (2) 
+  
+This week, we will explore household data and vehicle data. Get ready with `tidyverse`, `haven` and NHTS SPSS dataset.
+
+```{r}
+library(tidyverse)
+library(haven)
+```
+
+
+# Using Household Data
+
+```{r}
+hh <- read_sav("C:/Lab0/2021_UP431/Lab1/Data/spss (2)/hhpub.sav")
+```
+
+Begin with exploring what variables household data contains.
+
+```{r}
+hh <- as_factor(hh)
+names(hh)
+```
+Filter rows that are from `Chicago-Naperville-Elgin, IL-IN-WI` CBSA. 
+
+```{r}
+chi_hh <- hh %>% filter(hh_cbsa == "Chicago-Naperville-Elgin, IL-IN-WI")
+```
+
+
+**Task 1** 
+
+What do you think would be the relationship between car ownership and income group? 
+What variable would you use to analyze the relationship?
+
+Like lab 1, use `levels` and `fct_collapse` to see how income group is recorded in the dataset and customize it. 
+
+```{r}
+levels(chi_hh$hhfaminc)
+```
+Simplify income group to lower (< 50% of median income), moderate (50% >= and < 80%), middle (80% - 12%), and upper (>= 120%) income groups. Use 2017 median income, which is about $61,500.
+
+```{r}
+# Your code comes here
+chi_hh <- chi_hh %>%
+  mutate(
+    hhincome_short = fct_collapse(
+      hhfaminc,
+      "lower" = c(
+        "Less than $10,000",
+        "$10,000 to $14,999",
+        "$15,000 to $24,999",
+        "$25,000 to $34,999"
+      ),
+      "moderate" = c("$35,000 to $49,999"),
+      "middle" = c("$50,000 to $74,999"),
+      "upper" = c(
+        "$75,000 to $99,999",
+        "$100,000 to $124,999",
+        "$125,000 to $149,999",
+        "$150,000 to $199,999",
+        "$200,000 or more"
+      ),
+      Missing = c("I prefer not to answer", "I don't know", "Not ascertained")
+    )
+  ) %>% filter(hhincome_short != "Missing")
+```
+
+a) Calculate the percentage of household with no vehicle for each income group. Don't forget that every analysis should consider weight! 
+
+```{r}
+# Your code comes here
+noVehicle_income <- chi_hh %>% 
+  count(hhincome_short, hhvehcnt, wt = wthhfin) %>% 
+  group_by(hhincome_short) %>% 
+  mutate(per = prop.table(n)*100) %>%
+  filter(hhvehcnt == 0) 
+
+noVehicle_income
+```
+Is there any trend?
+
+
+b) Calculate the mean of vehicle number for each income group. You can use `weighted.mean` to easily calculate the weighted mean.
+
+```{r}
+# Your code comes here
+meanVehicle_income <- chi_hh %>% 
+  group_by(hhincome_short) %>% 
+  summarise(weighted_veh = weighted.mean(hhvehcnt, wthhfin))
+
+meanVehicle_income
+```
+
+c) Calculate the mean number of vehicle to driver ratio (HHVEHCNT/WRKCOUNT), for each income group.
+
+```{r}
+# Your code comes here
+meanVehicle2employee_income <- chi_hh %>% 
+  group_by(hhincome_short) %>% 
+  summarise(ratio = weighted.mean(hhvehcnt/drvrcnt, wthhfin)) # This arouses Inf! Guess why.
+
+meanVehicle2employee_income
+```
+Why can't we calculate the ratio with the previous code?
+
+```{r}
+# Your code comes here
+meanVehicle2employee_income <- chi_hh %>% 
+  mutate(ratio = ifelse(drvrcnt!=0, hhvehcnt/drvrcnt, hhvehcnt)) %>% # assumed that households with no driver has 1 worker. 
+  group_by(hhincome_short) %>% 
+  summarise(meanRatio = weighted.mean(ratio, wthhfin))
+
+meanVehicle2employee_income
+```
+
+d) Visualze Task 1 (a) into a bar graph using `geom_bar`. 
+
+```{r}
+# Your code comes here
+noVehicle_income$per <- round(noVehicle_income$per, 2)
+
+ggplot(noVehicle_income, aes(hhincome_short, per)) +
+  geom_bar(stat = "identity", fill = "royalblue") +
+  labs(x = "Income Group", y = "People with no vehicle(%)", title = "Population with No Vehicle by Income Group in Chicago CBSA") +
+  geom_text(
+    aes(label = paste0(per, "%"), y = per),
+    vjust = 1.4,
+    size = 4,
+    color = "white"
+  )
+```
+d-1) Crosstab: 
+bivariate frequency tables with percent numbers. Just another way of doing a similar task.
+
+```{r}
+
+#install.packages("pollster")  #a package for survey analysis
+library(pollster)
+
+
+crosstab(df = chi_hh,
+         x = hhincome_short,
+         y = hhvehcnt,
+         weight = wthhfin)
+
+crosstab(
+  df = chi_hh,
+  x = hhincome_short,
+  y = hhvehcnt,
+  weight = wthhfin,
+  format = "long"
+) %>%
+  ggplot(aes(hhincome_short, pct, fill = hhvehcnt)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Income Group", y = "People with no vehicle(%)", title = "Population with No Vehicle by Income Group in Chicago CBSA")
+```
+
+
+#Using Vehicle Data
+
+Import vehicle data. Explore the variables and filter rows from Chicago-Naperville-Elgin, IL-IN-WI.
+
+```{r}
+# Your code comes here
+veh <- read_sav("C:/Lab0/2021_UP431/Lab1/Data/spss (2)/vehpub.sav")
+veh <- as_factor(veh)
+names(veh)
+chi_veh <- veh %>% filter(HH_CBSA == "Chicago-Naperville-Elgin, IL-IN-WI")
+```
+
+Vehicle data consists one row for *each* vehicle. It means that a household with three vehicles will have three rows in the vehicle data.View the dataset and check `HOUSEID` to see what it means!  
+
+**Task 2**
+
+Assume that you need a VMT value in a household level. You would need to aggregate the BESTMILE variable in the vehicle file to a household level using HOUSEID.Before that, make sure that there are no non-numeric values in BESTMILE.
+
+```{r}
+# Your code comes here
+chi_veh <- chi_veh %>% 
+  mutate(BESTMILE_new = fct_collapse(BESTMILE, Missing = c("Not ascertained"))) %>%
+  filter(BESTMILE != "Missing")
+```                                       
+
+a) Use `aggregate` function. Let's leave HHFAMINC,WTHHFIN for the next task, and also HHSIZE, HBHUR, HHVEHCNT, DRVRCNT for linear regression in the last task.Name the aggregated VMT as `HHVMT`.
+
+```{r}
+# Your code comes here
+agg_veh <- aggregate(as.numeric(as.character(BESTMILE_new))~HOUSEID + HHFAMINC + WTHHFIN + HBHUR + HHSIZE + HHVEHCNT + DRVRCNT, chi_veh, sum)
+#agg_veh
+
+agg_veh <- agg_veh %>% rename("HHVMT" = "as.numeric(as.character(BESTMILE_new))")
+#agg_veh
+```
+
+b) Caculate the mean annual household VMT by four income group made in task 1.
+
+```{r}
+# Your code comes here
+agg_veh <- agg_veh %>%
+  mutate(
+    HHINCOME_SHORT = fct_collapse(
+      HHFAMINC,
+      "lower" = c(
+        "Less than $10,000",
+        "$10,000 to $14,999",
+        "$15,000 to $24,999",
+        "$25,000 to $34,999"
+      ),
+      "moderate" = c("$35,000 to $49,999"),
+      "middle" = c("$50,000 to $74,999"),
+      "upper" = c(
+        "$75,000 to $99,999",
+        "$100,000 to $124,999",
+        "$125,000 to $149,999",
+        "$150,000 to $199,999",
+        "$200,000 or more"
+      ),
+      Missing = c("I prefer not to answer", "I don't know", "Not ascertained")
+    )
+  ) %>% 
+  filter(HHINCOME_SHORT != "Missing")
+```
+
+```{r}
+# Your code comes here
+meanHHVMT_income <- agg_veh %>% 
+  group_by(HHINCOME_SHORT) %>% 
+  summarise(HHVMT = weighted.mean(HHVMT, WTHHFIN))
+
+meanHHVMT_income
+```
+
+c) Make an ANOVA test to check the relationship between annual household VMT and income group.
+
+```{r}
+# Your code comes here
+library(car)
+
+leveneTest(agg_veh$HHVMT, agg_veh$HHINCOME_SHORT)
+oneway.test(agg_veh$HHVMT~agg_veh$HHINCOME_SHORT, var.equal=F)
+```
+**Task 3** 
+
+Lastly, conduct a linear regression analysis at the household level.
+
+HHVMT = f(HHSIZE, HHVEHCNT/WRKCOUNT, INCGROUP --> dummy, HBHUR --> dummy)
+
+a) Create dummy variables (https://www.marsja.se/create-dummy-variables-in-r/).
+You can either use a libary to make it fast, or you can make dummy variables by yourself using `ifelse`.
+
+```{r}
+#install.packages("fastDummies")
+library(fastDummies)
+```
+
+If you want to use `fastDummies`, rename any variable with an empty space(' ') in the name, since you will not be able to access the variable by name if there is a space.
+ 
+```{r}
+# Your code comes here
+agg_veh <- agg_veh %>%
+  mutate(HBHUR_new = fct_collapse(
+    HBHUR,
+    "SmallTown" = c("Small Town"),
+    "SecondCity" = c("Second City"),
+    "Missing" = c("Not ascertained")
+  )) %>%
+  filter(HBHUR_new != "Missing")
+```
+
+```{r}
+# Your code comes here
+agg_veh <- dummy_cols(agg_veh, select_columns = c("HHINCOME_SHORT","HBHUR_new"))
+#agg_veh
+```
+
+a-2) IF you want to use `ifelse`, here is an example.
+
+```{r}
+#exampleData$Var_A <- ifelse(exampleData$Var == 'A', 1, 0)
+#exampleData$Var_B <- ifelse(exampleData$Var == 'B', 1, 0)
+```
+
+b) Run a regression and print the result using `summary` function.
+
+```{r}
+# Your code comes here
+HH_model <- lm(HHVMT ~ HHSIZE + HHVEHCNT/DRVRCNT + HHINCOME_SHORT_lower + HHINCOME_SHORT_moderate + HHINCOME_SHORT_upper + HBHUR_new_Urban + HBHUR_new_SmallTown + HBHUR_new_Suburban + HBHUR_new_Rural, data = agg_veh, weights = WTHHFIN)
+
+summary(HH_model)
+```
+Do you see any significant relationship?
+
+```{r}
+aov(HH_model)
+```
+
+c) What additional variables do you want to include in the regression?
+
+```{r}
+# Your code comes here
+```
+
+
+&nbsp;
